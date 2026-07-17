@@ -2,7 +2,23 @@ import utils from './util';
 
 const { randomString } = utils;
 
+const EMPTY_FAVORITES = () => ({
+  version: 1,
+  ui: { collapsed: false, ungroupedCollapsed: false },
+  groups: [],
+  favorites: [],
+});
+
+const validBase64 = value => (
+  value === ''
+  || (/^[A-Za-z0-9+/]+={0,2}$/.test(value)
+    && value.length % 4 === 0
+    && Buffer.from(value, 'base64').toString('base64') === value)
+);
+
 export default {
+  favoritesLoadError: false,
+  favoritesBackupError: null,
   getSetting(key) {
     let settings = localStorage.getItem('settings');
     settings = settings ? JSON.parse(settings) : {};
@@ -43,6 +59,98 @@ export default {
   },
   saveCustomFormatters(formatters = []) {
     return localStorage.setItem('customFormatters', JSON.stringify(formatters));
+  },
+  getFavorites() {
+    const raw = localStorage.getItem('favorites');
+
+    if (!raw) {
+      return EMPTY_FAVORITES();
+    }
+
+    try {
+      const data = JSON.parse(raw);
+
+      if (!data || data.version !== 1 || !Array.isArray(data.groups)
+        || !Array.isArray(data.favorites)) {
+        throw new Error('Invalid favorites schema');
+      }
+
+      const groups = data.groups.filter(group => (
+        group && typeof group.id === 'string' && group.id
+        && group.id !== 'ungrouped'
+        && typeof group.name === 'string' && group.name.trim()
+      )).map((group, index) => ({
+        id: group.id,
+        name: group.name.trim(),
+        order: Number.isFinite(group.order) ? group.order : index,
+        collapsed: !!group.collapsed,
+        createdAt: Number.isFinite(group.createdAt) ? group.createdAt : Date.now(),
+      }));
+      const groupIds = new Set(groups.map(group => group.id));
+      const identities = new Set();
+      const favorites = [];
+
+      data.favorites.forEach((favorite, index) => {
+        if (!favorite || typeof favorite.id !== 'string' || !favorite.id
+          || typeof favorite.connectionId !== 'string' || !favorite.connectionId
+          || !Number.isInteger(favorite.db) || favorite.db < 0
+          || typeof favorite.keyBase64 !== 'string' || !validBase64(favorite.keyBase64)
+          || typeof favorite.title !== 'string' || !favorite.title.trim()) {
+          return;
+        }
+
+        const identity = `${favorite.connectionId}\u0000${favorite.db}\u0000${favorite.keyBase64}`;
+        if (identities.has(identity)) {
+          return;
+        }
+        identities.add(identity);
+
+        favorites.push({
+          id: favorite.id,
+          groupId: groupIds.has(favorite.groupId) ? favorite.groupId : 'ungrouped',
+          connectionId: favorite.connectionId,
+          db: favorite.db,
+          keyBase64: favorite.keyBase64,
+          title: favorite.title.trim(),
+          order: Number.isFinite(favorite.order) ? favorite.order : index,
+          createdAt: Number.isFinite(favorite.createdAt) ? favorite.createdAt : Date.now(),
+        });
+      });
+
+      groups.sort((a, b) => a.order - b.order);
+      const normalizedGroups = groups.map((group, index) => ({
+        ...group,
+        order: index,
+      }));
+
+      return {
+        version: 1,
+        ui: {
+          collapsed: !!(data.ui && data.ui.collapsed),
+          ungroupedCollapsed: !!(data.ui && data.ui.ungroupedCollapsed),
+        },
+        groups: normalizedGroups,
+        favorites,
+      };
+    } catch (e) {
+      const backupKey = `favorites_corrupt_${Date.now()}`;
+      this.favoritesLoadError = true;
+      try {
+        localStorage.setItem(backupKey, raw);
+        localStorage.removeItem('favorites');
+      } catch (backupError) {
+        this.favoritesBackupError = backupError;
+      }
+      return EMPTY_FAVORITES();
+    }
+  },
+  saveFavorites(favorites) {
+    return localStorage.setItem('favorites', JSON.stringify(favorites));
+  },
+  consumeFavoritesLoadError() {
+    const hasError = this.favoritesLoadError;
+    this.favoritesLoadError = false;
+    return hasError;
   },
   addConnection(connection) {
     this.editConnectionByKey(connection, '');

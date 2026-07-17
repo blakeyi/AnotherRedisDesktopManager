@@ -157,6 +157,7 @@ export default {
       }
 
       const inputTxt = 'y';
+      const oldKey = Buffer.from(this.redisKey);
       const placeholder = this.$t('message.flushdb_prompt', { txt: inputTxt });
 
       // force confirm rename operation
@@ -178,6 +179,13 @@ export default {
 
             this.refreshKeyList(this.redisKey);
             this.refreshKeyList(this.keyName, 'add');
+            this.$bus.$emit(
+              'favoriteKeyRenamed',
+              this.client.ardmConnectionId,
+              this.client.condition ? this.client.condition.select : 0,
+              oldKey,
+              this.keyName,
+            );
             this.$bus.$emit('clickedKey', this.client, this.keyName);
           }
         }).catch((e) => {

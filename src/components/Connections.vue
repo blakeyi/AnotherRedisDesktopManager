@@ -14,6 +14,7 @@
     <!-- connections list -->
     <div class="connections-list">
       <ConnectionWrapper
+        ref="connectionWrappers"
         v-for="item, index of filteredConnections"
         :key="item.key ? item.key : item.connectionName"
         :index="index"
@@ -77,6 +78,27 @@ export default {
 
       this.connections = slovedConnections;
     },
+    openFavorite(favorite) {
+      const config = this.connections.find(item => item.key === favorite.connectionId);
+      if (!config) {
+        this.$favoriteStore.markUnavailable(favorite.id, 'connection');
+        this.$message.error(this.$t('message.favorite_connection_missing'));
+        return;
+      }
+
+      this.filterMode = '';
+      this.$nextTick(() => {
+        const wrappers = this.$refs.connectionWrappers || [];
+        const wrapperList = Array.isArray(wrappers) ? wrappers : [wrappers];
+        const wrapper = wrapperList.find(item => item.config.key === favorite.connectionId);
+        if (!wrapper) {
+          this.$favoriteStore.markUnavailable(favorite.id, 'connection');
+          this.$message.error(this.$t('message.favorite_connection_missing'));
+          return;
+        }
+        wrapper.openFavorite(favorite);
+      });
+    },
     sortOrder() {
       const dragWrapper = document.querySelector('.connections-list');
       Sortable.create(dragWrapper, {
@@ -104,7 +126,8 @@ export default {
 
 <style type="text/css">
   .connections-wrap {
-    height: calc(100vh - 59px);
+    flex: 1;
+    min-height: 0;
     overflow-y: auto;
     margin-top: 11px;
   }

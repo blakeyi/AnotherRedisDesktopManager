@@ -221,12 +221,12 @@ export default {
       this.searchMatch = '';
       this.searchExact = false;
     },
-    changeDb(dbIndex = false) {
+    changeDb(dbIndex = false, rejectOnError = false) {
       if (dbIndex !== false) {
-        this.selectedDbIndex = parseInt(dbIndex);
+        this.selectedDbIndex = parseInt(dbIndex, 10);
       }
 
-      this.client.select(this.selectedDbIndex)
+      return this.client.select(this.selectedDbIndex)
         .then(() => {
         // clear the search input
           this.searchMatch = '';
@@ -247,6 +247,10 @@ export default {
 
           // reset to db0
           this.selectedDbIndex = 0;
+          if (rejectOnError) {
+            throw e;
+          }
+          return false;
         });
     },
     customDbName(db) {

@@ -68,6 +68,9 @@
         <li @click='clickItem("delete")'>{{ $t('el.upload.delete') }}</li>
         <li @click='clickItem("multiple_select")'>{{ $t('message.multiple_select') }}</li>
         <li @click='clickItem("open")'>{{ $t('message.open_new_tab') }}</li>
+        <li @click='clickItem(isRightClickFavorite ? "remove_favorite" : "add_favorite")'>
+          {{ isRightClickFavorite ? $t('message.favorite_remove') : $t('message.favorite_add') }}
+        </li>
         <li @click='clickItem("export")'>{{ $t('message.export') }}Key</li>
       </ul>
     </div>
@@ -76,6 +79,7 @@
 
 <script type="text/javascript">
 import VueEasyTree from '@qii404/vue-easy-tree';
+import favoriteStore from '../favoriteStore';
 
 export default {
   data() {
@@ -102,6 +106,14 @@ export default {
   computed: {
     separator() {
       return this.config.separator === undefined ? ':' : this.config.separator;
+    },
+    isRightClickFavorite() {
+      if (!this.rightClickNode.isLeaf || !this.rightClickNode.data || !this.client) {
+        return false;
+      }
+      const key = Buffer.from(this.rightClickNode.data.nameBuffer.data);
+      const db = this.client.condition ? this.client.condition.select : 0;
+      return !!favoriteStore.findFavorite(this.config.key, db, key);
     },
   },
   methods: {
@@ -245,6 +257,25 @@ export default {
         // open key in new tab
         case 'open': {
           this.clickKey(Buffer.from(this.rightClickNode.data.nameBuffer.data), true);
+          break;
+        }
+        case 'add_favorite': {
+          const key = Buffer.from(this.rightClickNode.data.nameBuffer.data);
+          const db = this.client.condition ? this.client.condition.select : 0;
+          this.$bus.$emit('showAddFavoriteDialog', {
+            connectionId: this.config.key,
+            db,
+            key,
+          });
+          break;
+        }
+        case 'remove_favorite': {
+          const key = Buffer.from(this.rightClickNode.data.nameBuffer.data);
+          const db = this.client.condition ? this.client.condition.select : 0;
+          const favorite = favoriteStore.findFavorite(this.config.key, db, key);
+          if (favorite) {
+            favoriteStore.removeFavorite(favorite.id);
+          }
           break;
         }
         // delete whole folder

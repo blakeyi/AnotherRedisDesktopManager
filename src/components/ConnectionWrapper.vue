@@ -47,6 +47,7 @@ export default {
       pingTimer: null,
       pingInterval: 10000, // ms
       lastSelectedDb: 0,
+      openingFavorite: null,
     };
   },
   props: ['config', 'globalSettings', 'index'],
@@ -102,20 +103,49 @@ export default {
         this.afterOpenConnection(realClient, callback);
       }).catch((e) => {});
     },
-    afterOpenConnection(client, callback = false) {
-      // new connection, not ready
-      if (client.status != 'ready') {
-        client.on('ready', () => {
-          if (client.readyInited) {
+    openFavorite(favorite) {
+      this.openingFavorite = favorite;
+      this.$refs.connectionMenu.open(this.config.connectionName);
+      this.openConnection(() => {
+        if (!this.client) {
+          return;
+        }
+
+        const key = Buffer.from(favorite.keyBase64, 'base64');
+        const currentDb = this.client.condition ? this.client.condition.select : 0;
+        const selectDb = currentDb === favorite.db
+          ? Promise.resolve() : this.$refs.operateItem.changeDb(favorite.db, true);
+
+        selectDb.then(() => this.client.exists(key)).then((exists) => {
+          if (!exists) {
+            this.$favoriteStore.markUnavailable(favorite.id, 'key');
+            this.$message.error(this.$t('message.favorite_key_missing'));
             return;
           }
-
-          client.readyInited = true;
-          // open status tab
-          this.$bus.$emit('openStatus', client, this.config.connectionName);
-          this.startPingInterval();
-
-          this.initShow();
+          this.$favoriteStore.clearUnavailable(favorite.id);
+          this.$bus.$emit('clickedKey', this.client, key);
+        }).catch(() => {
+          this.$favoriteStore.markUnavailable(favorite.id, 'connection');
+        }).finally(() => {
+          this.openingFavorite = null;
+        });
+      }, true);
+    },
+    afterOpenConnection(client, callback = false) {
+      Object.defineProperty(client, 'ardmConnectionId', {
+        configurable: true,
+        value: this.config.key,
+      });
+      // new connection, not ready
+      if (client.status != 'ready') {
+        client.once('ready', () => {
+          if (!client.readyInited) {
+            client.readyInited = true;
+            // open status tab
+            this.$bus.$emit('openStatus', client, this.config.connectionName);
+            this.startPingInterval();
+            this.initShow();
+          }
           callback && callback();
         });
       }
@@ -177,6 +207,10 @@ export default {
         this.client = client;
 
         client.on('error', (error) => {
+          if (this.openingFavorite) {
+            this.$favoriteStore.markUnavailable(this.openingFavorite.id, 'connection');
+            this.openingFavorite = null;
+          }
           this.$message.error({
             message: `Client On Error: ${error} Config right?`,
             duration: 3000,

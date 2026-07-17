@@ -7,6 +7,7 @@ import bus from './bus';
 import util from './util';
 import storage from './storage';
 import shortcut from './shortcut';
+import favoriteStore from './favoriteStore';
 
 // vxe-table
 // import VxeUITable from 'vxe-table';
@@ -17,6 +18,7 @@ Vue.prototype.$bus = bus;
 Vue.prototype.$util = util;
 Vue.prototype.$storage = storage;
 Vue.prototype.$shortcut = shortcut;
+Vue.prototype.$favoriteStore = favoriteStore;
 
 Vue.use(ElementUI, { size: 'small' });
 Vue.config.productionTip = false;

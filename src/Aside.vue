@@ -28,6 +28,9 @@
       <CustomFormatter></CustomFormatter>
     </div>
 
+    <!-- favorites -->
+    <FavoriteTree @open="openFavorite"></FavoriteTree>
+
     <!-- connection list -->
     <Connections ref="connections"></Connections>
   </div>
@@ -40,13 +43,20 @@ import NewConnectionDialog from '@/components/NewConnectionDialog';
 import CommandLog from '@/components/CommandLog';
 import HotKeys from '@/components/HotKeys';
 import CustomFormatter from '@/components/CustomFormatter';
+import FavoriteTree from './components/FavoriteTree';
 
 export default {
   data() {
     return {};
   },
   components: {
-    Connections, NewConnectionDialog, Setting, CommandLog, HotKeys, CustomFormatter,
+    Connections,
+    NewConnectionDialog,
+    Setting,
+    CommandLog,
+    HotKeys,
+    CustomFormatter,
+    FavoriteTree,
   },
   methods: {
     editConnectionFinished() {
@@ -54,6 +64,9 @@ export default {
     },
     addNewConnection() {
       this.$refs.newConnectionDialog.show();
+    },
+    openFavorite(favorite) {
+      this.$refs.connections.openFavorite(favorite);
     },
     initShortcut() {
       // new connection
@@ -84,6 +97,11 @@ export default {
 </script>
 
 <style type="text/css">
+  .aside-outer-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
   .aside-top-container {
     margin-right: 8px;
   }

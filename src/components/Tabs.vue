@@ -21,6 +21,9 @@
 
     <div ref="tabContextMenu" class="tabs-context-menu">
       <ul>
+        <li v-if="contextTab && contextTab.component === 'key'" @click="toggleContextFavorite">
+          {{ contextFavorite ? $t('message.favorite_remove') : $t('message.favorite_add') }}
+        </li>
         <li @click="removeTab(preTabId)">{{ $t('message.close') }}</li>
         <li @click="removeOtherTabs('other')">{{ $t('message.close_other') }}</li>
         <li @click="removeOtherTabs('right')">{{ $t('message.close_right') }}</li>
@@ -37,12 +40,14 @@ import KeyDetail from '@/components/KeyDetail';
 import DeleteBatch from '@/components/DeleteBatch';
 import MemoryAnalysis from '@/components/MemoryAnalysis';
 import SlowLog from '@/components/SlowLog';
+import favoriteStore from '../favoriteStore';
 
 export default {
   data() {
     return {
       selectedTabName: '',
       tabs: [],
+      preTabId: '',
     };
   },
   components: {
@@ -52,6 +57,22 @@ export default {
     selectedTabName(value) {
       // for mousewheel toggle tabs
       value && this.$shortcut.setScope(value);
+    },
+  },
+  computed: {
+    contextTab() {
+      return this.tabs.find(item => item.name === this.preTabId);
+    },
+    contextFavorite() {
+      const tab = this.contextTab;
+      if (!tab || tab.component !== 'key' || !tab.client.ardmConnectionId) {
+        return null;
+      }
+      return favoriteStore.findFavorite(
+        tab.client.ardmConnectionId,
+        tab.db,
+        tab.redisKey,
+      );
     },
   },
   created() {
@@ -228,6 +249,7 @@ export default {
         component: 'key',
         redisKey: key,
         keyType: type,
+        db: dbIndex,
       };
     },
     addTab(newTabItem, newTab = false) {
@@ -336,6 +358,28 @@ export default {
       menu.style.display = 'block';
 
       document.addEventListener('click', this.hideAllMenus, { once: true });
+    },
+    toggleContextFavorite() {
+      const tab = this.contextTab;
+      if (!tab || tab.component !== 'key' || !tab.client.ardmConnectionId) {
+        return;
+      }
+
+      const favorite = favoriteStore.findFavorite(
+        tab.client.ardmConnectionId,
+        tab.db,
+        tab.redisKey,
+      );
+      if (favorite) {
+        favoriteStore.removeFavorite(favorite.id);
+        return;
+      }
+
+      this.$bus.$emit('showAddFavoriteDialog', {
+        connectionId: tab.client.ardmConnectionId,
+        db: tab.db,
+        key: tab.redisKey,
+      });
     },
     hideAllMenus() {
       const menus = document.querySelectorAll('.tabs-context-menu');
