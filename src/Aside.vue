@@ -29,7 +29,7 @@
     </div>
 
     <!-- favorites -->
-    <FavoriteTree @open="openFavorite"></FavoriteTree>
+    <FavoriteTree @open="openFavorite" @open-query="openSavedQuery"></FavoriteTree>
 
     <!-- connection list -->
     <Connections ref="connections"></Connections>
@@ -67,6 +67,9 @@ export default {
     },
     openFavorite(favorite) {
       this.$refs.connections.openFavorite(favorite);
+    },
+    openSavedQuery(query) {
+      this.$refs.connections.openSavedQuery(query);
     },
     initShortcut() {
       // new connection

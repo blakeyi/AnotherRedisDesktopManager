@@ -70,6 +70,10 @@
           <!-- start search -->
           <i class="el-input__icon search-icon" :class="searchIcon"  @click="changeMatchMode()"></i>
 
+          <el-tooltip effect="dark" :content="$t('message.save_query')" placement="bottom">
+            <i class="el-input__icon search-icon el-icon-star-off" @click.stop="saveCurrentQuery"></i>
+          </el-tooltip>
+
           <!-- extract search -->
           <el-tooltip effect="dark" :content="$t('message.exact_search')" placement="bottom">
             <el-checkbox v-model="searchExact"></el-checkbox>
@@ -349,6 +353,26 @@ export default {
 
       this.$parent.$parent.$parent.$refs.keyList.refreshKeyList();
     },
+    saveCurrentQuery() {
+      if (!this.searchMatch) {
+        this.$message.warning(this.$t('message.query_pattern_required'));
+        return;
+      }
+      if (!this.client || !this.client.ardmConnectionId) {
+        return;
+      }
+      this.$bus.$emit('showSaveQueryDialog', {
+        connectionId: this.client.ardmConnectionId,
+        db: this.client.condition ? this.client.condition.select : this.selectedDbIndex,
+        pattern: this.searchMatch,
+        exact: this.searchExact,
+      });
+    },
+    applySavedQuery(query) {
+      this.searchMatch = query.pattern;
+      this.searchExact = !!query.exact;
+      this.changeMatchMode();
+    },
     querySearch(input, cb) {
       const items = [];
 
@@ -437,7 +461,7 @@ export default {
     width: 100%;
   }
   .connection-menu .search-input .el-input__inner {
-    padding-right: 62px;
+    padding-right: 84px;
     /*margin-top: -10px;;
     margin-bottom: 15px;*/
   }

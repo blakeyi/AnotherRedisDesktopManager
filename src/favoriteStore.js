@@ -6,9 +6,17 @@ const UNGROUPED_ID = 'ungrouped';
 
 const state = Vue.observable({
   version: 1,
-  ui: { collapsed: false, ungroupedCollapsed: false },
+  ui: {
+    collapsed: false,
+    favoritesCollapsed: false,
+    ungroupedCollapsed: false,
+    recentCollapsed: false,
+    queriesCollapsed: false,
+  },
   groups: [],
   favorites: [],
+  recentKeys: [],
+  savedQueries: [],
   unavailable: {},
 });
 
@@ -20,6 +28,8 @@ function cloneData() {
     ui: state.ui,
     groups: state.groups,
     favorites: state.favorites,
+    recentKeys: state.recentKeys,
+    savedQueries: state.savedQueries,
   }));
 }
 
@@ -28,6 +38,8 @@ function replaceState(data) {
   state.ui = data.ui;
   state.groups.splice(0, state.groups.length, ...data.groups);
   state.favorites.splice(0, state.favorites.length, ...data.favorites);
+  state.recentKeys.splice(0, state.recentKeys.length, ...data.recentKeys);
+  state.savedQueries.splice(0, state.savedQueries.length, ...data.savedQueries);
 }
 
 function commit(data) {
@@ -165,6 +177,21 @@ const favoriteStore = {
     data.ui.collapsed = !!collapsed;
     commit(data);
   },
+  setFavoritesCollapsed(collapsed) {
+    const data = cloneData();
+    data.ui.favoritesCollapsed = !!collapsed;
+    commit(data);
+  },
+  setRecentCollapsed(collapsed) {
+    const data = cloneData();
+    data.ui.recentCollapsed = !!collapsed;
+    commit(data);
+  },
+  setQueriesCollapsed(collapsed) {
+    const data = cloneData();
+    data.ui.queriesCollapsed = !!collapsed;
+    commit(data);
+  },
   setGroupCollapsed(groupId, collapsed) {
     if (groupId === UNGROUPED_ID) {
       const data = cloneData();
@@ -249,6 +276,110 @@ const favoriteStore = {
     normalizeFavoriteOrder(data, groupId);
     commit(data);
     Vue.delete(state.unavailable, favoriteId);
+    return true;
+  },
+  recordRecentKey(payload) {
+    const encodedKey = keyBase64(payload.key);
+    const target = identity(payload.connectionId, payload.db, encodedKey);
+    const data = cloneData();
+    const existingIndex = data.recentKeys.findIndex(item => (
+      identity(item.connectionId, item.db, item.keyBase64) === target
+    ));
+    const existing = existingIndex >= 0 ? data.recentKeys.splice(existingIndex, 1)[0] : null;
+    const recent = {
+      id: existing ? existing.id : createId('recent'),
+      connectionId: payload.connectionId,
+      db: parseInt(payload.db, 10),
+      keyBase64: encodedKey,
+      title: payload.title || '',
+      lastOpenedAt: Date.now(),
+    };
+    data.recentKeys.unshift(recent);
+    data.recentKeys = data.recentKeys.slice(0, 30);
+    commit(data);
+    return recent;
+  },
+  removeRecentKey(recentId) {
+    const data = cloneData();
+    const index = data.recentKeys.findIndex(item => item.id === recentId);
+    if (index < 0) {
+      return false;
+    }
+    data.recentKeys.splice(index, 1);
+    commit(data);
+    Vue.delete(state.unavailable, recentId);
+    return true;
+  },
+  clearRecentKeys() {
+    const data = cloneData();
+    data.recentKeys = [];
+    commit(data);
+  },
+  findSavedQuery(connectionId, db, pattern, exact) {
+    return state.savedQueries.find(query => (
+      query.connectionId === connectionId && query.db === parseInt(db, 10)
+      && query.pattern === pattern && query.exact === !!exact
+    ));
+  },
+  addSavedQuery(payload) {
+    const name = payload.name.trim();
+    if (!name) {
+      throw new Error('saved_query_name_required');
+    }
+    const existing = this.findSavedQuery(
+      payload.connectionId, payload.db, payload.pattern, payload.exact,
+    );
+    if (existing) {
+      return { query: existing, created: false };
+    }
+    const data = cloneData();
+    const query = {
+      id: createId('query'),
+      name,
+      connectionId: payload.connectionId,
+      db: parseInt(payload.db, 10),
+      pattern: payload.pattern,
+      exact: !!payload.exact,
+      createdAt: Date.now(),
+      lastUsedAt: 0,
+    };
+    data.savedQueries.push(query);
+    commit(data);
+    return { query, created: true };
+  },
+  renameSavedQuery(queryId, name) {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      throw new Error('saved_query_name_required');
+    }
+    const data = cloneData();
+    const query = data.savedQueries.find(item => item.id === queryId);
+    if (!query) {
+      return false;
+    }
+    query.name = trimmed;
+    commit(data);
+    return true;
+  },
+  removeSavedQuery(queryId) {
+    const data = cloneData();
+    const index = data.savedQueries.findIndex(item => item.id === queryId);
+    if (index < 0) {
+      return false;
+    }
+    data.savedQueries.splice(index, 1);
+    commit(data);
+    Vue.delete(state.unavailable, queryId);
+    return true;
+  },
+  touchSavedQuery(queryId) {
+    const data = cloneData();
+    const query = data.savedQueries.find(item => item.id === queryId);
+    if (!query) {
+      return false;
+    }
+    query.lastUsedAt = Date.now();
+    commit(data);
     return true;
   },
   syncRenamedKey(connectionId, db, oldKey, newKey) {

@@ -227,7 +227,16 @@ export default {
           return;
         }
 
-        this.addTab(this.initKeyTabItem(client, key, type), newTab);
+        const tabItem = this.initKeyTabItem(client, key, type);
+        if (client.ardmConnectionId) {
+          this.$favoriteStore.recordRecentKey({
+            connectionId: client.ardmConnectionId,
+            db: tabItem.db,
+            key,
+            title: this.$util.bufToString(key) || this.$t('message.favorite_empty_key'),
+          });
+        }
+        this.addTab(tabItem, newTab);
       }).catch((e) => {
         this.$message.error(`Type Error: ${e.message}`);
       });

@@ -131,6 +131,29 @@ export default {
         });
       }, true);
     },
+    openSavedQuery(query) {
+      this.openingFavorite = query;
+      this.$refs.connectionMenu.open(this.config.connectionName);
+      this.openConnection(() => {
+        if (!this.client) {
+          return;
+        }
+
+        const currentDb = this.client.condition ? this.client.condition.select : 0;
+        const selectDb = currentDb === query.db
+          ? Promise.resolve() : this.$refs.operateItem.changeDb(query.db, true);
+
+        selectDb.then(() => {
+          this.$favoriteStore.clearUnavailable(query.id);
+          this.$refs.operateItem.applySavedQuery(query);
+          this.$favoriteStore.touchSavedQuery(query.id);
+        }).catch(() => {
+          this.$favoriteStore.markUnavailable(query.id, 'connection');
+        }).finally(() => {
+          this.openingFavorite = null;
+        });
+      }, true);
+    },
     afterOpenConnection(client, callback = false) {
       Object.defineProperty(client, 'ardmConnectionId', {
         configurable: true,

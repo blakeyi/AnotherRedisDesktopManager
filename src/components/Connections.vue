@@ -99,6 +99,27 @@ export default {
         wrapper.openFavorite(favorite);
       });
     },
+    openSavedQuery(query) {
+      const config = this.connections.find(item => item.key === query.connectionId);
+      if (!config) {
+        this.$favoriteStore.markUnavailable(query.id, 'connection');
+        this.$message.error(this.$t('message.saved_query_connection_missing'));
+        return;
+      }
+
+      this.filterMode = '';
+      this.$nextTick(() => {
+        const wrappers = this.$refs.connectionWrappers || [];
+        const wrapperList = Array.isArray(wrappers) ? wrappers : [wrappers];
+        const wrapper = wrapperList.find(item => item.config.key === query.connectionId);
+        if (!wrapper) {
+          this.$favoriteStore.markUnavailable(query.id, 'connection');
+          this.$message.error(this.$t('message.saved_query_connection_missing'));
+          return;
+        }
+        wrapper.openSavedQuery(query);
+      });
+    },
     sortOrder() {
       const dragWrapper = document.querySelector('.connections-list');
       Sortable.create(dragWrapper, {

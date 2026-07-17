@@ -1,94 +1,199 @@
 <template>
-  <section class="favorite-tree">
-    <div class="favorite-header" @click="togglePanel">
+  <section class="favorite-tree workspace-tree">
+    <div class="workspace-header" @click="togglePanel">
       <span>
         <i :class="state.ui.collapsed ? 'fa fa-caret-right' : 'fa fa-caret-down'"></i>
-        <i class="fa fa-star favorite-star"></i>
-        {{ $t('message.favorites') }}
-        <span class="favorite-count">({{ state.favorites.length }})</span>
+        <i class="fa fa-briefcase workspace-icon"></i>
+        {{ $t('message.workspace') }}
       </span>
-      <el-button
-        class="favorite-add-group"
-        type="text"
-        icon="el-icon-circle-plus-outline"
-        :title="$t('message.favorite_new_group')"
-        @click.stop="newGroup(false)">
-      </el-button>
     </div>
 
-    <div v-show="!state.ui.collapsed" class="favorite-groups">
-      <div v-if="!state.favorites.length && !state.groups.length" class="favorite-empty">
-        {{ $t('message.favorite_empty') }}
+    <div v-show="!state.ui.collapsed" class="workspace-content">
+      <div class="favorite-header workspace-section-header" @click="toggleFavorites">
+        <span>
+          <i
+            :class="state.ui.favoritesCollapsed
+              ? 'fa fa-caret-right' : 'fa fa-caret-down'">
+          </i>
+          <i class="fa fa-star favorite-star"></i>
+          {{ $t('message.favorites') }}
+          <span class="favorite-count">({{ state.favorites.length }})</span>
+        </span>
+        <el-button
+          class="favorite-add-group"
+          type="text"
+          icon="el-icon-circle-plus-outline"
+          :title="$t('message.favorite_new_group')"
+          @click.stop="newGroup(false)">
+        </el-button>
       </div>
 
-      <div v-for="group in displayGroups" :key="group.id" class="favorite-group">
-        <div class="favorite-group-header" @click="toggleGroup(group)">
-          <span class="favorite-group-title" :title="group.name">
-            <i :class="group.collapsed ? 'fa fa-caret-right' : 'fa fa-caret-down'"></i>
-            <i class="fa fa-folder"></i>
-            {{ group.name }}
-            <span class="favorite-count">({{ favoritesInGroup(group.id).length }})</span>
-          </span>
+      <div v-show="!state.ui.favoritesCollapsed" class="favorite-groups">
+        <div v-if="!state.favorites.length && !state.groups.length" class="favorite-empty">
+          {{ $t('message.favorite_empty') }}
+        </div>
 
+        <div v-for="group in displayGroups" :key="group.id" class="favorite-group">
+          <div class="favorite-group-header" @click="toggleGroup(group)">
+            <span class="favorite-group-title" :title="group.name">
+              <i :class="group.collapsed ? 'fa fa-caret-right' : 'fa fa-caret-down'"></i>
+              <i class="fa fa-folder"></i>
+              {{ group.name }}
+              <span class="favorite-count">({{ favoritesInGroup(group.id).length }})</span>
+            </span>
+
+            <el-dropdown
+              v-if="group.id !== ungroupedId"
+              trigger="click"
+              size="mini"
+              @command="command => groupCommand(group, command)"
+              @click.native.stop>
+              <i class="el-icon-more favorite-action"></i>
+              <el-dropdown-menu slot="dropdown">
+                <el-dropdown-item command="rename">
+                  {{ $t('message.favorite_rename') }}
+                </el-dropdown-item>
+                <el-dropdown-item command="up" :disabled="group.order === 0">
+                  {{ $t('message.favorite_move_up') }}
+                </el-dropdown-item>
+                <el-dropdown-item
+                  command="down"
+                  :disabled="group.order === state.groups.length - 1">
+                  {{ $t('message.favorite_move_down') }}
+                </el-dropdown-item>
+                <el-dropdown-item command="delete" divided>
+                  {{ $t('el.upload.delete') }}
+                </el-dropdown-item>
+              </el-dropdown-menu>
+            </el-dropdown>
+          </div>
+
+          <div v-show="!group.collapsed" class="favorite-items">
+            <div
+              v-for="favorite in favoritesInGroup(group.id)"
+              :key="favorite.id"
+              class="favorite-item"
+              :class="{ 'is-unavailable': isUnavailable(favorite) }"
+              :title="favoriteTitle(favorite)"
+              @click="openFavorite(favorite)">
+              <i class="fa fa-key"></i>
+              <span class="favorite-item-title">{{ favorite.title }}</span>
+              <span class="favorite-db">DB{{ favorite.db }}</span>
+              <i v-if="isUnavailable(favorite)" class="el-icon-warning favorite-warning"></i>
+
+              <el-dropdown
+                trigger="click"
+                size="mini"
+                @command="command => favoriteCommand(favorite, command)"
+                @click.native.stop>
+                <i class="el-icon-more favorite-action"></i>
+                <el-dropdown-menu slot="dropdown">
+                  <el-dropdown-item command="open">{{ $t('message.open') }}</el-dropdown-item>
+                  <el-dropdown-item command="edit">
+                    {{ $t('message.favorite_edit') }}
+                  </el-dropdown-item>
+                  <el-dropdown-item command="copy">
+                    {{ $t('message.favorite_copy_key') }}
+                  </el-dropdown-item>
+                  <el-dropdown-item command="remove" divided>
+                    {{ $t('message.favorite_remove') }}
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </el-dropdown>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="workspace-section-header" @click="toggleRecent">
+        <span>
+          <i :class="state.ui.recentCollapsed ? 'fa fa-caret-right' : 'fa fa-caret-down'"></i>
+          <i class="fa fa-history recent-icon"></i>
+          {{ $t('message.recent_keys') }}
+          <span class="favorite-count">({{ state.recentKeys.length }})</span>
+        </span>
+        <el-button
+          v-if="state.recentKeys.length"
+          class="favorite-add-group"
+          type="text"
+          icon="el-icon-delete"
+          :title="$t('message.recent_clear')"
+          @click.stop="clearRecentKeys">
+        </el-button>
+      </div>
+      <div v-show="!state.ui.recentCollapsed" class="workspace-section-body">
+        <div v-if="!state.recentKeys.length" class="favorite-empty workspace-empty">
+          {{ $t('message.recent_empty') }}
+        </div>
+        <div
+          v-for="recent in state.recentKeys"
+          :key="recent.id"
+          class="favorite-item workspace-entry"
+          :class="{ 'is-unavailable': isUnavailable(recent) }"
+          :title="storedKeyTitle(recent)"
+          @click="openFavorite(recent)">
+          <i class="fa fa-key"></i>
+          <span class="favorite-item-title">{{ recent.title }}</span>
+          <span class="favorite-db">DB{{ recent.db }}</span>
+          <i v-if="isUnavailable(recent)" class="el-icon-warning favorite-warning"></i>
           <el-dropdown
-            v-if="group.id !== ungroupedId"
             trigger="click"
             size="mini"
-            @command="command => groupCommand(group, command)"
+            @command="command => recentCommand(recent, command)"
             @click.native.stop>
             <i class="el-icon-more favorite-action"></i>
             <el-dropdown-menu slot="dropdown">
-              <el-dropdown-item command="rename">
-                {{ $t('message.favorite_rename') }}
+              <el-dropdown-item command="open">{{ $t('message.open') }}</el-dropdown-item>
+              <el-dropdown-item command="copy">
+                {{ $t('message.favorite_copy_key') }}
               </el-dropdown-item>
-              <el-dropdown-item command="up" :disabled="group.order === 0">
-                {{ $t('message.favorite_move_up') }}
-              </el-dropdown-item>
-              <el-dropdown-item
-                command="down"
-                :disabled="group.order === state.groups.length - 1">
-                {{ $t('message.favorite_move_down') }}
-              </el-dropdown-item>
-              <el-dropdown-item command="delete" divided>
+              <el-dropdown-item command="remove" divided>
                 {{ $t('el.upload.delete') }}
               </el-dropdown-item>
             </el-dropdown-menu>
           </el-dropdown>
         </div>
+      </div>
 
-        <div v-show="!group.collapsed" class="favorite-items">
-          <div
-            v-for="favorite in favoritesInGroup(group.id)"
-            :key="favorite.id"
-            class="favorite-item"
-            :class="{ 'is-unavailable': isUnavailable(favorite) }"
-            :title="favoriteTitle(favorite)"
-            @click="openFavorite(favorite)">
-            <i class="fa fa-key"></i>
-            <span class="favorite-item-title">{{ favorite.title }}</span>
-            <span class="favorite-db">DB{{ favorite.db }}</span>
-            <i v-if="isUnavailable(favorite)" class="el-icon-warning favorite-warning"></i>
-
-            <el-dropdown
-              trigger="click"
-              size="mini"
-              @command="command => favoriteCommand(favorite, command)"
-              @click.native.stop>
-              <i class="el-icon-more favorite-action"></i>
-              <el-dropdown-menu slot="dropdown">
-                <el-dropdown-item command="open">{{ $t('message.open') }}</el-dropdown-item>
-                <el-dropdown-item command="edit">
-                  {{ $t('message.favorite_edit') }}
-                </el-dropdown-item>
-                <el-dropdown-item command="copy">
-                  {{ $t('message.favorite_copy_key') }}
-                </el-dropdown-item>
-                <el-dropdown-item command="remove" divided>
-                  {{ $t('message.favorite_remove') }}
-                </el-dropdown-item>
-              </el-dropdown-menu>
-            </el-dropdown>
-          </div>
+      <div class="workspace-section-header" @click="toggleQueries">
+        <span>
+          <i :class="state.ui.queriesCollapsed ? 'fa fa-caret-right' : 'fa fa-caret-down'"></i>
+          <i class="fa fa-search query-icon"></i>
+          {{ $t('message.saved_queries') }}
+          <span class="favorite-count">({{ state.savedQueries.length }})</span>
+        </span>
+      </div>
+      <div v-show="!state.ui.queriesCollapsed" class="workspace-section-body">
+        <div v-if="!state.savedQueries.length" class="favorite-empty workspace-empty">
+          {{ $t('message.saved_query_empty') }}
+        </div>
+        <div
+          v-for="query in state.savedQueries"
+          :key="query.id"
+          class="favorite-item workspace-entry"
+          :class="{ 'is-unavailable': isUnavailable(query) }"
+          :title="savedQueryTitle(query)"
+          @click="openSavedQuery(query)">
+          <i class="fa fa-search"></i>
+          <span class="favorite-item-title">{{ query.name }}</span>
+          <span class="favorite-db">DB{{ query.db }}</span>
+          <i v-if="isUnavailable(query)" class="el-icon-warning favorite-warning"></i>
+          <el-dropdown
+            trigger="click"
+            size="mini"
+            @command="command => queryCommand(query, command)"
+            @click.native.stop>
+            <i class="el-icon-more favorite-action"></i>
+            <el-dropdown-menu slot="dropdown">
+              <el-dropdown-item command="open">{{ $t('message.open') }}</el-dropdown-item>
+              <el-dropdown-item command="rename">
+                {{ $t('message.favorite_rename') }}
+              </el-dropdown-item>
+              <el-dropdown-item command="remove" divided>
+                {{ $t('el.upload.delete') }}
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </el-dropdown>
         </div>
       </div>
     </div>
@@ -181,6 +286,7 @@ export default {
   created() {
     this.refreshConnectionIds();
     this.$bus.$on('showAddFavoriteDialog', this.showAddFavoriteDialog);
+    this.$bus.$on('showSaveQueryDialog', this.showSaveQueryDialog);
     this.$bus.$on('refreshConnections', this.refreshConnectionIds);
     this.$bus.$on('favoriteKeyRenamed', this.syncRenamedKey);
   },
@@ -191,6 +297,7 @@ export default {
   },
   beforeDestroy() {
     this.$bus.$off('showAddFavoriteDialog', this.showAddFavoriteDialog);
+    this.$bus.$off('showSaveQueryDialog', this.showSaveQueryDialog);
     this.$bus.$off('refreshConnections', this.refreshConnectionIds);
     this.$bus.$off('favoriteKeyRenamed', this.syncRenamedKey);
   },
@@ -200,6 +307,7 @@ export default {
         'favorite_group_name_required',
         'favorite_group_exists',
         'favorite_title_required',
+        'saved_query_name_required',
       ];
       return knownErrors.includes(error.message) ? this.$t(`message.${error.message}`) : error.message;
     },
@@ -212,6 +320,15 @@ export default {
     },
     togglePanel() {
       favoriteStore.setPanelCollapsed(!this.state.ui.collapsed);
+    },
+    toggleFavorites() {
+      favoriteStore.setFavoritesCollapsed(!this.state.ui.favoritesCollapsed);
+    },
+    toggleRecent() {
+      favoriteStore.setRecentCollapsed(!this.state.ui.recentCollapsed);
+    },
+    toggleQueries() {
+      favoriteStore.setQueriesCollapsed(!this.state.ui.queriesCollapsed);
     },
     toggleGroup(group) {
       favoriteStore.setGroupCollapsed(group.id, !group.collapsed);
@@ -271,6 +388,32 @@ export default {
       this.dialogVisible = true;
       this.$nextTick(() => this.$refs.titleInput && this.$refs.titleInput.focus());
     },
+    showSaveQueryDialog(payload) {
+      const existing = favoriteStore.findSavedQuery(
+        payload.connectionId, payload.db, payload.pattern, payload.exact,
+      );
+      if (existing) {
+        this.$message.warning(this.$t('message.saved_query_exists'));
+        return;
+      }
+      this.$prompt(this.$t('message.saved_query_name'), this.$t('message.save_query'), {
+        inputValue: payload.pattern,
+        inputValidator: value => (
+          value && value.trim() ? true : this.$t('message.saved_query_name_required')
+        ),
+      }).then(({ value }) => {
+        try {
+          const result = favoriteStore.addSavedQuery({ ...payload, name: value });
+          if (result.created) {
+            this.$message.success(this.$t('message.saved_query_added'));
+          } else {
+            this.$message.warning(this.$t('message.saved_query_exists'));
+          }
+        } catch (e) {
+          this.$message.error(this.errorMessage(e));
+        }
+      }).catch(() => {});
+    },
     editFavorite(favorite) {
       this.dialogMode = 'edit';
       this.pendingFavorite = favorite;
@@ -318,13 +461,56 @@ export default {
     openFavorite(favorite) {
       this.$emit('open', favorite);
     },
+    recentCommand(recent, command) {
+      if (command === 'open') {
+        this.openFavorite(recent);
+      } else if (command === 'copy') {
+        clipboard.writeText(this.$util.bufToString(Buffer.from(recent.keyBase64, 'base64')));
+      } else if (command === 'remove') {
+        favoriteStore.removeRecentKey(recent.id);
+      }
+    },
+    clearRecentKeys() {
+      this.$confirm(this.$t('message.recent_clear_tip'), { type: 'warning' })
+        .then(() => favoriteStore.clearRecentKeys()).catch(() => {});
+    },
+    openSavedQuery(query) {
+      this.$emit('open-query', query);
+    },
+    queryCommand(query, command) {
+      if (command === 'open') {
+        this.openSavedQuery(query);
+      } else if (command === 'rename') {
+        this.$prompt(this.$t('message.saved_query_name'), this.$t('message.favorite_rename'), {
+          inputValue: query.name,
+          inputValidator: value => (
+            value && value.trim() ? true : this.$t('message.saved_query_name_required')
+          ),
+        }).then(({ value }) => {
+          try {
+            favoriteStore.renameSavedQuery(query.id, value);
+          } catch (e) {
+            this.$message.error(this.errorMessage(e));
+          }
+        }).catch(() => {});
+      } else if (command === 'remove') {
+        favoriteStore.removeSavedQuery(query.id);
+      }
+    },
     isUnavailable(favorite) {
       return !this.connectionIds.has(favorite.connectionId)
         || !!this.state.unavailable[favorite.id];
     },
     favoriteTitle(favorite) {
-      const key = this.$util.bufToString(Buffer.from(favorite.keyBase64, 'base64'));
-      return `${key} | DB${favorite.db}`;
+      return this.storedKeyTitle(favorite);
+    },
+    storedKeyTitle(item) {
+      const key = this.$util.bufToString(Buffer.from(item.keyBase64, 'base64'));
+      return `${key} | DB${item.db}`;
+    },
+    savedQueryTitle(query) {
+      const mode = query.exact ? this.$t('message.exact_search') : this.$t('message.pattern_search');
+      return `${query.pattern} | DB${query.db} | ${mode}`;
     },
     syncRenamedKey(connectionId, db, oldKey, newKey) {
       favoriteStore.syncRenamedKey(connectionId, db, oldKey, newKey);
@@ -339,7 +525,7 @@ export default {
   border: 1px solid #e4e0e0;
   border-radius: 4px;
   flex: 0 1 auto;
-  max-height: 38vh;
+  max-height: 48vh;
   overflow: hidden;
   color: #292f31;
 }
@@ -347,22 +533,57 @@ export default {
   border-color: #52636c;
   color: #f7f7f7;
 }
+.workspace-header,
 .favorite-header,
+.workspace-section-header,
 .favorite-group-header,
 .favorite-item {
   display: flex;
   align-items: center;
   cursor: pointer;
 }
-.favorite-header {
+.workspace-header {
   min-height: 32px;
   padding: 0 8px;
   background: #f5f7fa;
   font-weight: 600;
+}
+.workspace-header,
+.workspace-section-header,
+.favorite-header {
   justify-content: space-between;
 }
-.dark-mode .favorite-header {
+.dark-mode .workspace-header {
   background: #34454d;
+}
+.workspace-icon {
+  color: #409eff;
+  margin: 0 4px;
+}
+.workspace-content {
+  max-height: calc(48vh - 34px);
+  overflow-y: auto;
+}
+.workspace-section-header {
+  min-height: 30px;
+  padding: 0 6px 0 24px;
+  font-size: 13px;
+  border-top: 1px solid #ebeef5;
+}
+.favorite-header {
+  background: #fafafa;
+  font-weight: 600;
+  border-top: 0;
+}
+.dark-mode .favorite-header {
+  background: #2e3c43;
+}
+.workspace-section-header > span > .fa {
+  width: 15px;
+  margin-right: 5px;
+}
+.dark-mode .workspace-section-header {
+  border-top-color: #52636c;
 }
 .favorite-star {
   color: #e6a23c;
@@ -372,8 +593,17 @@ export default {
   padding: 4px;
 }
 .favorite-groups {
-  max-height: calc(38vh - 34px);
-  overflow-y: auto;
+  overflow: visible;
+  margin-left: 24px;
+  border-left: 1px solid #dcdfe6;
+}
+.workspace-section-body {
+  margin-left: 24px;
+  border-left: 1px solid #dcdfe6;
+}
+.dark-mode .favorite-groups,
+.dark-mode .workspace-section-body {
+  border-left-color: #52636c;
 }
 .favorite-empty {
   padding: 14px 8px;
@@ -383,7 +613,7 @@ export default {
 }
 .favorite-group-header {
   min-height: 27px;
-  padding: 0 6px 0 9px;
+  padding: 0 6px 0 12px;
   background: #fafafa;
 }
 .dark-mode .favorite-group-header {
@@ -407,8 +637,15 @@ export default {
 }
 .favorite-item {
   height: 26px;
-  padding: 0 5px 0 24px;
+  padding: 0 5px 0 32px;
   font-size: 13px;
+}
+.workspace-entry {
+  padding-left: 16px;
+}
+.workspace-empty {
+  padding-left: 16px;
+  text-align: left;
 }
 .favorite-item:hover {
   background: #e7ebec;

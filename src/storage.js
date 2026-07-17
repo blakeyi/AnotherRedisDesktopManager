@@ -4,9 +4,17 @@ const { randomString } = utils;
 
 const EMPTY_FAVORITES = () => ({
   version: 1,
-  ui: { collapsed: false, ungroupedCollapsed: false },
+  ui: {
+    collapsed: false,
+    favoritesCollapsed: false,
+    ungroupedCollapsed: false,
+    recentCollapsed: false,
+    queriesCollapsed: false,
+  },
   groups: [],
   favorites: [],
+  recentKeys: [],
+  savedQueries: [],
 });
 
 const validBase64 = value => (
@@ -117,6 +125,59 @@ export default {
         });
       });
 
+      const recentIdentities = new Set();
+      const recentKeys = [];
+      const savedQueryIdentities = new Set();
+      const savedQueries = [];
+
+      (Array.isArray(data.recentKeys) ? data.recentKeys : []).forEach((recent) => {
+        if (!recent || typeof recent.id !== 'string' || !recent.id
+          || typeof recent.connectionId !== 'string' || !recent.connectionId
+          || !Number.isInteger(recent.db) || recent.db < 0
+          || typeof recent.keyBase64 !== 'string' || !validBase64(recent.keyBase64)
+          || typeof recent.title !== 'string') {
+          return;
+        }
+        const recentIdentity = `${recent.connectionId}\u0000${recent.db}\u0000${recent.keyBase64}`;
+        if (recentIdentities.has(recentIdentity)) {
+          return;
+        }
+        recentIdentities.add(recentIdentity);
+        recentKeys.push({
+          id: recent.id,
+          connectionId: recent.connectionId,
+          db: recent.db,
+          keyBase64: recent.keyBase64,
+          title: recent.title,
+          lastOpenedAt: Number.isFinite(recent.lastOpenedAt) ? recent.lastOpenedAt : Date.now(),
+        });
+      });
+
+      (Array.isArray(data.savedQueries) ? data.savedQueries : []).forEach((query) => {
+        if (!query || typeof query.id !== 'string' || !query.id
+          || typeof query.name !== 'string' || !query.name.trim()
+          || typeof query.connectionId !== 'string' || !query.connectionId
+          || !Number.isInteger(query.db) || query.db < 0
+          || typeof query.pattern !== 'string') {
+          return;
+        }
+        const queryIdentity = `${query.connectionId}\u0000${query.db}\u0000${query.pattern}\u0000${!!query.exact}`;
+        if (savedQueryIdentities.has(queryIdentity)) {
+          return;
+        }
+        savedQueryIdentities.add(queryIdentity);
+        savedQueries.push({
+          id: query.id,
+          name: query.name.trim(),
+          connectionId: query.connectionId,
+          db: query.db,
+          pattern: query.pattern,
+          exact: !!query.exact,
+          createdAt: Number.isFinite(query.createdAt) ? query.createdAt : Date.now(),
+          lastUsedAt: Number.isFinite(query.lastUsedAt) ? query.lastUsedAt : 0,
+        });
+      });
+
       groups.sort((a, b) => a.order - b.order);
       const normalizedGroups = groups.map((group, index) => ({
         ...group,
@@ -127,10 +188,15 @@ export default {
         version: 1,
         ui: {
           collapsed: !!(data.ui && data.ui.collapsed),
+          favoritesCollapsed: !!(data.ui && data.ui.favoritesCollapsed),
           ungroupedCollapsed: !!(data.ui && data.ui.ungroupedCollapsed),
+          recentCollapsed: !!(data.ui && data.ui.recentCollapsed),
+          queriesCollapsed: !!(data.ui && data.ui.queriesCollapsed),
         },
         groups: normalizedGroups,
         favorites,
+        recentKeys: recentKeys.sort((a, b) => b.lastOpenedAt - a.lastOpenedAt).slice(0, 30),
+        savedQueries,
       };
     } catch (e) {
       const backupKey = `favorites_corrupt_${Date.now()}`;
